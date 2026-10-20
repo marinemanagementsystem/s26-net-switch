@@ -1,6 +1,9 @@
 package com.s26ultra.netswitch
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.GestureDescription
+import android.graphics.Path
+import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
@@ -16,15 +19,26 @@ class NetSwitchAccessibilityService : AccessibilityService() {
         val pending = SwitchPreferences.getActivePendingRequest(this) ?: return
         val pkg = event?.packageName?.toString().orEmpty()
 
-        // Kendi uygulamamızın içindeyken ayar ekranı açılana kadar bekle
+        // Kendi paketimizin ekranlarını atla
         if (pkg == packageName) return
 
         val now = System.currentTimeMillis()
-        if (now - lastActionTimestampMs < 380L) return
+        if (now - lastActionTimestampMs < 350L) return
 
-        val root = rootInActiveWindow ?: return
         val pairs = mutableListOf<Pair<AccessibilityNodeInfo, AccessibilityNodeMatcher.ScannedNode>>()
-        collectNodes(root, pairs)
+        val activeRoot = rootInActiveWindow
+        if (activeRoot != null) {
+            collectNodes(activeRoot, pairs)
+        }
+        // Samsung One UI'da Dialog / BottomSheet ayrı bir AccessibilityWindowInfo içinde açılabilir
+        runCatching {
+            for (win in windows) {
+                val r = win.root
+                if (r != null && r != activeRoot) {
+                    collectNodes(r, pairs)
+                }
+            }
+        }
 
         if (pairs.isEmpty()) return
         val scannedList = pairs.map { it.second }
@@ -37,7 +51,7 @@ class NetSwitchAccessibilityService : AccessibilityService() {
             )
             if (bestOption != null) {
                 val targetNode = pairs[bestOption.index].first
-                if (clickNodeOrParent(targetNode)) {
+                if (clickNodeOrGesture(targetNode)) {
                     lastActionTimestampMs = now
                     SwitchPreferences.clearPendingRequest(this)
                     SwitchPreferences.setSavedModeForSlot(
@@ -63,22 +77,22 @@ class NetSwitchAccessibilityService : AccessibilityService() {
                             performGlobalAction(GLOBAL_ACTION_BACK)
                             mainHandler.postDelayed({
                                 performGlobalAction(GLOBAL_ACTION_HOME)
-                            }, 220L)
-                        }, 320L)
+                            }, 200L)
+                        }, 300L)
                     }
                     return
                 }
             }
         }
 
-        // 2. Henüz seçim penceresi açılmadıysa "Şebeke modu" / "Network mode" satırını veya SIM sekmesini bul ve tıkla
+        // 2. Henüz seçim penceresi açılmadıysa "Şebeke modu" / "Network mode" satırını bul ve tıkla
         val rowOrTab = AccessibilityNodeMatcher.findNetworkModeRowOrSimTab(
             nodes = scannedList,
             targetSimSlot = pending.targetSimSlot
         )
         if (rowOrTab != null) {
             val targetNode = pairs[rowOrTab.index].first
-            if (clickNodeOrParent(targetNode)) {
+            if (clickNodeOrGesture(targetNode)) {
                 lastActionTimestampMs = now
                 SwitchPreferences.updatePendingStep(this, AutomationStep.SELECT_MODE_OPTION)
             }
@@ -111,10 +125,11 @@ class NetSwitchAccessibilityService : AccessibilityService() {
         }
     }
 
-    private fun clickNodeOrParent(node: AccessibilityNodeInfo?): Boolean {
+    private fun clickNodeOrGesture(node: AccessibilityNodeInfo?): Boolean {
+        if (node == null) return false
         var current: AccessibilityNodeInfo? = node
         var depth = 0
-        while (current != null && depth < 6) {
+        while (current != null && depth < 7) {
             if (current.isClickable && current.isEnabled) {
                 if (current.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
                     return true
@@ -123,7 +138,23 @@ class NetSwitchAccessibilityService : AccessibilityService() {
             current = current.parent
             depth++
         }
-        return node?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true
+
+        if (node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+            return true
+        }
+
+        // Yedek: Samsung One UI satırlarında koordinata doğrudan dokunma (Gesture)
+        val rect = Rect()
+        node.getBoundsInScreen(rect)
+        if (!rect.isEmpty && rect.centerX() > 0 && rect.centerY() > 0) {
+            val path = Path().apply {
+                moveTo(rect.centerX().toFloat(), rect.centerY().toFloat())
+            }
+            val stroke = GestureDescription.StrokeDescription(path, 0L, 60L)
+            val gesture = GestureDescription.Builder().addStroke(stroke).build()
+            return dispatchGesture(gesture, null, null)
+        }
+        return false
     }
 
     override fun onInterrupt() {

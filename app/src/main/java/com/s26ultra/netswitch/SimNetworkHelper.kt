@@ -172,7 +172,8 @@ object SimNetworkHelper {
 
     /**
      * Widget veya uygulama içinden 5G / 4.5G geçişini başlatır.
-     * @param explicitTargetMode null ise mevcut modun tersine (5G <-> 4.5G) geçiş yapar.
+     * 1. Eğer Shizuku izni varsa: Telefon ayarlarını HİÇ AÇMADAN doğrudan arka planda değiştirir.
+     * 2. Shizuku yoksa ve Erişilebilirlik açıksa: Mobil Ağlar menüsünü açıp otomatik tıklayarak ana ekrana döner.
      */
     fun triggerNetworkSwitch(
         context: Context,
@@ -180,8 +181,34 @@ object SimNetworkHelper {
     ) {
         val resolved = resolveTargetSim(context)
         val targetMode = explicitTargetMode ?: resolved.currentMode.toggle()
-        val accessibilityReady = isAccessibilityServiceEnabled(context)
 
+        // 1. Öncelik: Shizuku aktifse HİÇ EKRAN AÇMADAN arka planda değiştir
+        if (DirectModemSwitcher.hasShizukuPermission()) {
+            val switchedSilently = DirectModemSwitcher.switchSilentlyInBackground(
+                context = context,
+                subId = resolved.subscriptionId,
+                slotIndex = resolved.slotIndex,
+                targetMode = targetMode
+            )
+            if (switchedSilently) {
+                SwitchPreferences.clearPendingRequest(context)
+                SwitchPreferences.setSavedModeForSlot(context, resolved.slotIndex, targetMode)
+                SwitchPreferences.recordLog(
+                    context,
+                    "${resolved.displayTitle} -> ${targetMode.shortLabel} (Arka planda sessizce değiştirildi)"
+                )
+                NetSwitchWidgetProvider.updateAllWidgets(context)
+                Toast.makeText(
+                    context,
+                    "✓ ${resolved.displayTitle}: ${targetMode.shortLabel} aktif edildi",
+                    Toast.LENGTH_SHORT
+                ).show()
+                return
+            }
+        }
+
+        // 2. Öncelik: Erişilebilirlik Servisi ile hızlı otomatik seçim
+        val accessibilityReady = isAccessibilityServiceEnabled(context)
         if (accessibilityReady) {
             SwitchPreferences.setPendingRequest(
                 context = context,
@@ -189,16 +216,16 @@ object SimNetworkHelper {
                 targetSimSlot = resolved.slotIndex,
                 targetSubId = resolved.subscriptionId
             )
+            SwitchPreferences.setSavedModeForSlot(context, resolved.slotIndex, targetMode)
             SwitchPreferences.recordLog(
                 context,
                 "${resolved.displayTitle} -> ${targetMode.shortLabel} otomatik geçiş başlatıldı"
             )
         } else {
-            // Erişilebilirlik kapalıysa bile kullanıcının hedeflediği modu widget'ta güncelle ve ayar ekranını aç
             SwitchPreferences.setSavedModeForSlot(context, resolved.slotIndex, targetMode)
             SwitchPreferences.recordLog(
                 context,
-                "${resolved.displayTitle} -> ${targetMode.shortLabel} için ayar ekranı açıldı (Manuel mod)"
+                "${resolved.displayTitle} -> ${targetMode.shortLabel} için ayar ekranı açıldı"
             )
             Toast.makeText(
                 context,
@@ -215,28 +242,20 @@ object SimNetworkHelper {
         )
     }
 
-    /**
-     * Samsung S26 Ultra (One UI) veya standart Android Mobil Ağlar ekranını
-     * hedef SIM (subId / slotIndex) parametreleriyle açar.
-     */
     fun launchMobileNetworkSettings(
         context: Context,
         subId: Int = -1,
         slotIndex: Int = 0
     ) {
         val candidateIntents = listOf(
-            // 1. Samsung One UI doğrudan Mobil Ağlar (NetSettingsActivity)
             Intent().apply {
                 component = ComponentName(
                     "com.samsung.android.app.telephonyui",
                     "com.samsung.android.app.telephonyui.netsettings.ui.NetSettingsActivity"
                 )
             },
-            // 2. Standart Android Mobil Ağ / Operatör Ayarları
             Intent(Settings.ACTION_NETWORK_OPERATOR_SETTINGS),
-            // 3. Yedek: Veri Dolaşımı / Mobil Ağ Ayarları
             Intent(Settings.ACTION_DATA_ROAMING_SETTINGS),
-            // 4. Son yedek: Kablosuz ve Ağ Ayarları
             Intent(Settings.ACTION_WIRELESS_SETTINGS)
         )
 
@@ -261,9 +280,6 @@ object SimNetworkHelper {
         }
     }
 
-    /**
-     * Samsung SIM Yöneticisi (SIM Manager) ekranını açar.
-     */
     fun launchSimManagerSettings(context: Context) {
         val candidates = listOf(
             Intent("com.samsung.settings.SIMCARD_MGR"),
@@ -281,9 +297,6 @@ object SimNetworkHelper {
         }
     }
 
-    /**
-     * Android Gizli Radyo Bilgisi (*#*#4636#*#* / RadioInfo) ekranını açmayı dener.
-     */
     fun launchRadioInfoScreen(context: Context) {
         val candidates = listOf(
             Intent().apply {

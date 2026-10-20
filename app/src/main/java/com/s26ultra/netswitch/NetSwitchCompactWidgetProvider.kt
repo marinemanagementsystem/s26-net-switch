@@ -55,7 +55,7 @@ class NetSwitchCompactWidgetProvider : AppWidgetProvider() {
             )
             views.setOnClickPendingIntent(
                 R.id.btn_compact_toggle,
-                NetSwitchWidgetProvider.buildBroadcastPendingIntent(
+                NetSwitchWidgetProvider.buildTriggerActivityPendingIntent(
                     context,
                     NetSwitchWidgetProvider.ACTION_SWITCH_TOGGLE,
                     202

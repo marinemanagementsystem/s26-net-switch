@@ -4,6 +4,7 @@ import android.Manifest
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
@@ -59,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import rikka.shizuku.Shizuku
 
 private val OneUiDarkPalette = darkColorScheme(
     primary = Color(0xFF3B82F6),
@@ -97,6 +99,9 @@ fun NetSwitchHomeScreen() {
     var isAccessibilityOn by remember {
         mutableStateOf(SimNetworkHelper.isAccessibilityServiceEnabled(context))
     }
+    var hasShizukuPerm by remember {
+        mutableStateOf(DirectModemSwitcher.hasShizukuPermission())
+    }
     var simSelection by remember {
         mutableStateOf(SwitchPreferences.getSimSelectionMode(context))
     }
@@ -112,11 +117,23 @@ fun NetSwitchHomeScreen() {
         NetSwitchWidgetProvider.updateAllWidgets(context)
     }
 
+    DisposableEffect(Unit) {
+        val shizukuListener = Shizuku.OnRequestPermissionResultListener { _, grantResult ->
+            hasShizukuPerm = (grantResult == PackageManager.PERMISSION_GRANTED)
+            refreshTick++
+        }
+        runCatching { Shizuku.addRequestPermissionResultListener(shizukuListener) }
+        onDispose {
+            runCatching { Shizuku.removeRequestPermissionResultListener(shizukuListener) }
+        }
+    }
+
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 hasPhonePerm = SimNetworkHelper.hasPhonePermission(context)
                 isAccessibilityOn = SimNetworkHelper.isAccessibilityServiceEnabled(context)
+                hasShizukuPerm = DirectModemSwitcher.hasShizukuPermission()
                 simSelection = SwitchPreferences.getSimSelectionMode(context)
                 autoReturnHome = SwitchPreferences.isAutoReturnHomeEnabled(context)
                 refreshTick++
@@ -144,7 +161,6 @@ fun NetSwitchHomeScreen() {
             .padding(horizontal = 16.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // Başlık
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -218,7 +234,6 @@ fun NetSwitchHomeScreen() {
                     }
                 }
 
-                // Hızlı Geçiş Butonları
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -278,7 +293,7 @@ fun NetSwitchHomeScreen() {
             }
         }
 
-        // Çift SIM (SIM 1 / SIM 2 / Otomatik Veri) Seçimi Kartı
+        // Çift SIM Seçimi Kartı
         Card(
             shape = RoundedCornerShape(22.dp),
             colors = CardDefaults.cardColors(containerColor = Color(0xFF111827)),
@@ -338,7 +353,6 @@ fun NetSwitchHomeScreen() {
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // SIM 1 ve SIM 2 Durum Özeti
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -468,7 +482,7 @@ fun NetSwitchHomeScreen() {
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    text = "Kurulum & Otomatik Seçim Ayarları",
+                    text = "Kurulum & Geçiş Yöntemi",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
@@ -493,60 +507,44 @@ fun NetSwitchHomeScreen() {
 
                 // 2. Erişilebilirlik Servisi
                 SetupItemRow(
-                    title = "2. Otomatik 5G/4.5G Seçim Servisi",
+                    title = "2. Otomatik 5G/4.5G Seçim Servisi (Erişilebilirlik)",
                     subtitle = if (isAccessibilityOn) {
-                        "Açık: Butona basınca 5G/4.5G'yi kendi seçip ana ekrana döner"
+                        "Açık: Ayar penceresini milisaniyede açıp 5G/4.5G seçip kapatır"
                     } else {
-                        "Kapalı: Şu an sadece Şebeke Modu ekranını açar (otomatik tıklama için açın)"
+                        "Kapalı: Otomatik tıklama için etkinleştirin"
                     },
                     isDone = isAccessibilityOn,
-                    actionText = if (isAccessibilityOn) "Ayarlar" else "Etkinleştir",
+                    actionText = if (isAccessibilityOn) "Açık" else "Etkinleştir",
                     onClick = {
                         SimNetworkHelper.openAccessibilitySettings(context)
                     }
                 )
 
-                // Android 15/16 (One UI 7/8) Kısıtlanmış Ayarlar İpucu
-                if (!isAccessibilityOn) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF1E293B))
-                            .padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Text(
-                            text = "💡 S26 Ultra (Android 15/16) İpucu: 'Kısıtlanmış Ayar' Uyarısı Çıkarsa",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFFFBBF24)
-                        )
-                        Text(
-                            text = "1. Aşağıdaki 'Uygulama Bilgilerini Aç' butonuna dokunun.\n" +
-                                "2. Sağ üst köşedeki ⋮ (3 nokta) menüsüne dokunun.\n" +
-                                "3. 'Kısıtlanmış ayarlara izin ver' seçeneğine dokunun.\n" +
-                                "4. Ardından Erişilebilirlik > Yüklü Uygulamalar > S26 5G/4.5G Switch servisini açın.",
-                            fontSize = 11.sp,
-                            color = Color(0xFFD1D5DB)
-                        )
-                        OutlinedButton(
-                            onClick = {
-                                val intent = Intent(
-                                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                                    Uri.fromParts("package", context.packageName, null)
-                                ).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
-                                context.startActivity(intent)
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Text("Uygulama Bilgilerini Aç (Kısıtlanmış Ayar İzni İçin)", fontSize = 11.sp)
+                // 3. Shizuku (Ayarlar ekranı hiç açılmadan arka planda sessiz geçiş)
+                SetupItemRow(
+                    title = "3. Sessiz Arka Plan Modu (Shizuku - İsteğe Bağlı)",
+                    subtitle = if (hasShizukuPerm) {
+                        "Aktif: Telefon ayarları HİÇ açılmadan doğrudan ana ekranda değişir!"
+                    } else if (DirectModemSwitcher.isShizukuAvailable()) {
+                        "Shizuku çalışıyor: İzin vererek ayar ekranı açılmadan değiştirebilirsiniz"
+                    } else {
+                        "Shizuku kuruluysa ayar ekranı hiç açılmadan arka planda değiştirir"
+                    },
+                    isDone = hasShizukuPerm,
+                    actionText = if (hasShizukuPerm) "Aktif" else "Shizuku İzni",
+                    onClick = {
+                        if (DirectModemSwitcher.isShizukuAvailable()) {
+                            DirectModemSwitcher.requestShizukuPermission()
+                        } else {
+                            Toast.makeText(
+                                context,
+                                "Play Store'dan 'Shizuku' uygulamasını başlatıp Kablosuz Hata Ayıklama ile eşleştirdiğinizde ekran açılmadan çalışır.",
+                                Toast.LENGTH_LONG
+                            ).show()
                         }
                     }
-                }
+                )
 
-                // Seçimden sonra otomatik ana ekrana dönme anahtarı
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -560,7 +558,7 @@ fun NetSwitchHomeScreen() {
                             color = Color.White
                         )
                         Text(
-                            text = "5G veya 4.5G seçildikten hemen sonra ayar penceresini kapatır",
+                            text = "Erişilebilirlik modunda 5G/4.5G seçildikten sonra pencereyi kapatır",
                             fontSize = 12.sp,
                             color = Color(0xFF9CA3AF)
                         )
@@ -573,53 +571,6 @@ fun NetSwitchHomeScreen() {
                         },
                         colors = SwitchDefaults.colors(checkedThumbColor = Color.White)
                     )
-                }
-            }
-        }
-
-        // Doğrudan Kısayollar Kartı
-        Card(
-            shape = RoundedCornerShape(22.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF111827)),
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(1.dp, Color(0xFF1F2937), RoundedCornerShape(22.dp))
-        ) {
-            Column(
-                modifier = Modifier.padding(18.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = "Manuel Sistem Kısayolları",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = {
-                            SimNetworkHelper.launchMobileNetworkSettings(
-                                context,
-                                resolvedTarget.subscriptionId,
-                                resolvedTarget.slotIndex
-                            )
-                        },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("Mobil Ağlar Menüsü", fontSize = 12.sp)
-                    }
-
-                    OutlinedButton(
-                        onClick = { SimNetworkHelper.launchRadioInfoScreen(context) },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("Radyo Bilgisi (4636)", fontSize = 12.sp)
-                    }
                 }
             }
         }

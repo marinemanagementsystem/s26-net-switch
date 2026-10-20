@@ -21,6 +21,25 @@
             </intent-filter>
         </activity>
 
+        <!-- Widget'tan basıldığında Android 15/16 BAL engeline takılmadan çalışan görünmez tetikleyici -->
+        <activity
+            android:name=".SwitchTriggerActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="singleInstance"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!-- Shizuku Provider (Ayarlar ekranı açılmadan doğrudan arka planda 5G/4.5G değiştirmek için) -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:enabled="true"
+            android:exported="true"
+            android:multiprocess="false"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+
         <!-- Geniş (4x1) Çift SIM + 5G/4.5G Kontrol Paneli Widget'ı -->
         <receiver
             android:name=".NetSwitchWidgetProvider"
@@ -28,14 +47,10 @@
             android:label="@string/widget_full_name">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-                <action android:name="com.s26ultra.netswitch.ACTION_SWITCH_5G" />
-                <action android:name="com.s26ultra.netswitch.ACTION_SWITCH_45G" />
-                <action android:name="com.s26ultra.netswitch.ACTION_SWITCH_TOGGLE" />
                 <action android:name="com.s26ultra.netswitch.ACTION_SELECT_SIM_AUTO" />
                 <action android:name="com.s26ultra.netswitch.ACTION_SELECT_SIM_1" />
                 <action android:name="com.s26ultra.netswitch.ACTION_SELECT_SIM_2" />
                 <action android:name="com.s26ultra.netswitch.ACTION_CYCLE_SIM" />
-                <action android:name="com.s26ultra.netswitch.ACTION_OPEN_NET_SETTINGS" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"

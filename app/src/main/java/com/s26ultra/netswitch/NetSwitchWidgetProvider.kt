@@ -24,15 +24,6 @@ class NetSwitchWidgetProvider : AppWidgetProvider() {
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
         when (intent.action) {
-            ACTION_SWITCH_5G -> {
-                SimNetworkHelper.triggerNetworkSwitch(context, NetworkModeTarget.MODE_5G)
-            }
-            ACTION_SWITCH_45G -> {
-                SimNetworkHelper.triggerNetworkSwitch(context, NetworkModeTarget.MODE_4_5G)
-            }
-            ACTION_SWITCH_TOGGLE -> {
-                SimNetworkHelper.triggerNetworkSwitch(context, null)
-            }
             ACTION_SELECT_SIM_AUTO -> {
                 SwitchPreferences.setSimSelectionMode(context, SimSelectionMode.AUTO_ACTIVE_DATA)
                 updateAllWidgets(context)
@@ -49,14 +40,6 @@ class NetSwitchWidgetProvider : AppWidgetProvider() {
                 val next = SwitchPreferences.getSimSelectionMode(context).nextCycle()
                 SwitchPreferences.setSimSelectionMode(context, next)
                 updateAllWidgets(context)
-            }
-            ACTION_OPEN_NET_SETTINGS -> {
-                val resolved = SimNetworkHelper.resolveTargetSim(context)
-                SimNetworkHelper.launchMobileNetworkSettings(
-                    context = context,
-                    subId = resolved.subscriptionId,
-                    slotIndex = resolved.slotIndex
-                )
             }
         }
     }
@@ -104,7 +87,6 @@ class NetSwitchWidgetProvider : AppWidgetProvider() {
                 "$prefix${resolved.displayTitle} • ${resolved.currentMode.shortLabel}"
             )
 
-            // SIM seçim sekmeleri görünümü
             styleSimChip(
                 views,
                 R.id.btn_sim_auto,
@@ -121,7 +103,6 @@ class NetSwitchWidgetProvider : AppWidgetProvider() {
                 simSelection == SimSelectionMode.SIM_2
             )
 
-            // 5G ve 4.5G butonlarının aktif/pasif vurgusu
             views.setInt(
                 R.id.btn_switch_5g,
                 "setBackgroundResource",
@@ -142,7 +123,7 @@ class NetSwitchWidgetProvider : AppWidgetProvider() {
                 if (!is5G) Color.WHITE else Color.parseColor("#D1D5DB")
             )
 
-            // Tıklama aksiyonları
+            // SIM seçim sekmeleri (Broadcast ile anında güncellenir)
             views.setOnClickPendingIntent(
                 R.id.btn_sim_auto,
                 buildBroadcastPendingIntent(context, ACTION_SELECT_SIM_AUTO, 101)
@@ -155,24 +136,25 @@ class NetSwitchWidgetProvider : AppWidgetProvider() {
                 R.id.btn_sim_2,
                 buildBroadcastPendingIntent(context, ACTION_SELECT_SIM_2, 103)
             )
+
+            // 5G / 4.5G Geçiş Butonları (Android 15/16 BAL engeline takılmamak için SwitchTriggerActivity başlatır)
             views.setOnClickPendingIntent(
                 R.id.btn_switch_5g,
-                buildBroadcastPendingIntent(context, ACTION_SWITCH_5G, 104)
+                buildTriggerActivityPendingIntent(context, ACTION_SWITCH_5G, 104)
             )
             views.setOnClickPendingIntent(
                 R.id.btn_switch_45g,
-                buildBroadcastPendingIntent(context, ACTION_SWITCH_45G, 105)
+                buildTriggerActivityPendingIntent(context, ACTION_SWITCH_45G, 105)
             )
             views.setOnClickPendingIntent(
                 R.id.btn_switch_toggle,
-                buildBroadcastPendingIntent(context, ACTION_SWITCH_TOGGLE, 106)
+                buildTriggerActivityPendingIntent(context, ACTION_SWITCH_TOGGLE, 106)
             )
             views.setOnClickPendingIntent(
                 R.id.btn_open_settings,
-                buildBroadcastPendingIntent(context, ACTION_OPEN_NET_SETTINGS, 107)
+                buildTriggerActivityPendingIntent(context, ACTION_OPEN_NET_SETTINGS, 107)
             )
 
-            // Başlığa tıklanınca ana uygulamayı aç
             val openAppIntent = Intent(context, MainActivity::class.java)
             val openAppPending = PendingIntent.getActivity(
                 context,
@@ -206,6 +188,23 @@ class NetSwitchWidgetProvider : AppWidgetProvider() {
                 this.action = action
             }
             return PendingIntent.getBroadcast(
+                context,
+                requestCode,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        }
+
+        fun buildTriggerActivityPendingIntent(
+            context: Context,
+            action: String,
+            requestCode: Int
+        ): PendingIntent {
+            val intent = Intent(context, SwitchTriggerActivity::class.java).apply {
+                this.action = action
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            }
+            return PendingIntent.getActivity(
                 context,
                 requestCode,
                 intent,

@@ -1,1 +1,4 @@
-# Add project specific ProGuard rules here.
+-keep class rikka.shizuku.** { *; }
+-dontwarn rikka.shizuku.**
+-keep class com.android.internal.telephony.** { *; }
+-dontwarn com.android.internal.telephony.**
