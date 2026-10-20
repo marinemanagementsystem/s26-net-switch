@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">S26 5G/4.5G Switch</string>
+    <string name="widget_full_name">5G / 4.5G Kontrol Paneli (Çift SIM)</string>
+    <string name="widget_compact_name">5G / 4.5G Tek Tık Geçiş (Kompakt)</string>
+    <string name="accessibility_service_label">S26 5G/4.5G Otomatik Geçiş Servisi</string>
+    <string name="accessibility_service_description">Widget üzerinden 5G veya 4.5G (LTE) butonuna bastığınızda Mobil Ağlar menüsünde ilgili şebeke modunu sizin yerinize otomatik seçip ana ekrana döner. Yalnızca siz butona bastığınızda çalışır.</string>
+</resources>

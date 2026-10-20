@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Aktif veri SIM'ini (SIM 1 / SIM 2) ve canlı 5G / 4.5G bağlantı türünü algılamak için -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@drawable/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.S26NetSwitch">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Geniş (4x1) Çift SIM + 5G/4.5G Kontrol Paneli Widget'ı -->
+        <receiver
+            android:name=".NetSwitchWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_full_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.s26ultra.netswitch.ACTION_SWITCH_5G" />
+                <action android:name="com.s26ultra.netswitch.ACTION_SWITCH_45G" />
+                <action android:name="com.s26ultra.netswitch.ACTION_SWITCH_TOGGLE" />
+                <action android:name="com.s26ultra.netswitch.ACTION_SELECT_SIM_AUTO" />
+                <action android:name="com.s26ultra.netswitch.ACTION_SELECT_SIM_1" />
+                <action android:name="com.s26ultra.netswitch.ACTION_SELECT_SIM_2" />
+                <action android:name="com.s26ultra.netswitch.ACTION_CYCLE_SIM" />
+                <action android:name="com.s26ultra.netswitch.ACTION_OPEN_NET_SETTINGS" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info_full" />
+        </receiver>
+
+        <!-- Kompakt (2x1) Tek Tıkla 5G/4.5G Hızlı Geçiş Widget'ı -->
+        <receiver
+            android:name=".NetSwitchCompactWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_compact_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info_compact" />
+        </receiver>
+
+        <!-- Samsung One UI Mobil Ağlar Ekranında 5G / 4.5G Seçimini Otomatik Yapan Erişilebilirlik Servisi -->
+        <service
+            android:name=".NetSwitchAccessibilityService"
+            android:exported="false"
+            android:label="@string/accessibility_service_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+
+    </application>
+
+</manifest>
