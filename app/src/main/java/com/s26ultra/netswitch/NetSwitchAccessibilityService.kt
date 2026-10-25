@@ -14,6 +14,7 @@ class NetSwitchAccessibilityService : AccessibilityService() {
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private var lastActionTimestampMs: Long = 0L
+    private var networkModeRowClickedAtMs: Long = 0L
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val pending = SwitchPreferences.getActivePendingRequest(this) ?: return
@@ -85,15 +86,24 @@ class NetSwitchAccessibilityService : AccessibilityService() {
             }
         }
 
-        // 2. Henüz seçim penceresi açılmadıysa "Şebeke modu" / "Network mode" satırını bul ve tıkla
+        // 2. Satır zaten tıklandıysa diyaloğun açılmasını bekle; tekrar tıklamak açılan
+        // diyaloğu kapatıp yeniden açtığı için sonsuz aç/kapa döngüsüne yol açıyordu.
+        if (pending.step == AutomationStep.SELECT_MODE_OPTION &&
+            now - networkModeRowClickedAtMs < ROW_RETRY_DELAY_MS
+        ) {
+            return
+        }
+
+        // 3. Henüz seçim penceresi açılmadıysa "Şebeke modu" / "Network mode" satırını bul ve tıkla
         val rowOrTab = AccessibilityNodeMatcher.findNetworkModeRowOrSimTab(
             nodes = scannedList,
             targetSimSlot = pending.targetSimSlot
-        )
-        if (rowOrTab != null) {
-            val targetNode = pairs[rowOrTab.index].first
-            if (clickNodeOrGesture(targetNode)) {
-                lastActionTimestampMs = now
+        ) ?: return
+        val targetNode = pairs[rowOrTab.index].first
+        if (clickNodeOrGesture(targetNode)) {
+            lastActionTimestampMs = now
+            if (AccessibilityNodeMatcher.isNetworkModeRow(rowOrTab)) {
+                networkModeRowClickedAtMs = now
                 SwitchPreferences.updatePendingStep(this, AutomationStep.SELECT_MODE_OPTION)
             }
         }
@@ -155,6 +165,10 @@ class NetSwitchAccessibilityService : AccessibilityService() {
             return dispatchGesture(gesture, null, null)
         }
         return false
+    }
+
+    private companion object {
+        const val ROW_RETRY_DELAY_MS = 3_000L
     }
 
     override fun onInterrupt() {
