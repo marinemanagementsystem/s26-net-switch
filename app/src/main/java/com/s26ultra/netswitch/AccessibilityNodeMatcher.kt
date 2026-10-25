@@ -172,6 +172,11 @@ object AccessibilityNodeMatcher {
         return allNetModeRows.firstOrNull()
     }
 
+    fun isNetworkModeRow(node: ScannedNode): Boolean {
+        val norm = normalize(node.combinedText)
+        return NETWORK_MODE_ROW_KEYWORDS.any { norm.contains(it) }
+    }
+
     fun normalize(input: String): String {
         return input
             .lowercase(Locale("tr", "TR"))
